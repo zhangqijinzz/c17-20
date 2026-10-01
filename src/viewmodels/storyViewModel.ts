@@ -143,6 +143,10 @@ export class StoryViewModel {
       this.setState({ notice: '请先选择伏笔埋下的场景' });
       return;
     }
+    if (payoffSceneId && !this.requireStory().scenes.some((scene) => scene.id === payoffSceneId)) {
+      this.setState({ notice: '请选择有效的回收场景' });
+      return;
+    }
     const clue: StoryClue = { id: createId('clue'), title: cleanTitle, setupSceneId, payoffSceneId };
     this.updateStory((story) => ({
       ...story,
@@ -150,6 +154,38 @@ export class StoryViewModel {
       scenes: story.scenes.map((scene) => scene.id === setupSceneId ? { ...scene, clueIds: [...scene.clueIds, clue.id] } : scene),
     }));
     this.setState({ notice: payoffSceneId ? '伏笔关系已建立' : '伏笔已记录，等待回收' });
+  }
+
+  /**
+   * 事后改判伏笔回收位置：
+   * - 待回收伏笔传入一个场景 = 补录回收
+   * - 已回收伏笔传入另一个场景 = 改判到别的一幕
+   * - 传入空字符串 = 撤回回收，重新变成待回收（统计与时间线标记随之回退）
+   * 完成态项目同样允许操作，完成度在保存后重新计算。
+   */
+  setCluePayoff(clueId: string, payoffSceneId: string): void {
+    const story = this.requireStory();
+    const clue = story.clues.find((item) => item.id === clueId);
+    if (!clue) {
+      this.setState({ notice: '没有找到这条伏笔' });
+      return;
+    }
+    if (payoffSceneId && !story.scenes.some((scene) => scene.id === payoffSceneId)) {
+      this.setState({ notice: '请选择有效的回收场景' });
+      return;
+    }
+    if (clue.payoffSceneId === payoffSceneId) return;
+
+    const wasResolved = clue.payoffSceneId !== '';
+    this.updateStory((current) => ({
+      ...current,
+      clues: current.clues.map((item) => (item.id === clueId ? { ...item, payoffSceneId } : item)),
+    }));
+
+    const notice = payoffSceneId
+      ? wasResolved ? '回收位置已改判' : '回收已补录'
+      : '已撤回回收，伏笔重新待回收';
+    this.setState({ notice });
   }
 
   completeProject(): void {
@@ -173,6 +209,11 @@ export class StoryViewModel {
     const story = this.requireStory();
     const keyword = this.state.search.trim().toLowerCase();
     return orderedScenes(story).filter((scene) => `${scene.title}${scene.summary}${scene.conflict}`.toLowerCase().includes(keyword));
+  }
+
+  /** 不受搜索过滤影响的全量场景，供伏笔补录/改判回收位置时选择。 */
+  get allScenes(): StoryScene[] {
+    return orderedScenes(this.requireStory());
   }
 
   get selectedScene(): StoryScene | null {

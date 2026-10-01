@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createStarterStory } from '../models/story';
-import { getStats, getTimelineWarning, orderedScenes, sanitizeStory, validateName } from '../models/storyRules';
+import { getStats, getTimelineWarning, isClueResolved, orderedScenes, sanitizeStory, sceneClueLinks, validateName } from '../models/storyRules';
 
 describe('story domain rules', () => {
   it('sorts scenes and calculates unresolved clues', () => {
@@ -21,5 +21,46 @@ describe('story domain rules', () => {
     expect(sanitizeStory('{bad json}')).toBeNull();
     expect(sanitizeStory({ version: 99 })).toBeNull();
     expect(sanitizeStory(createStarterStory())).not.toBeNull();
+  });
+
+  it('keeps old clues with an empty payoff unresolved after loading', () => {
+    const story = createStarterStory();
+    const loaded = sanitizeStory(story);
+    expect(loaded).not.toBeNull();
+    const clue = loaded!.clues[0];
+    expect(clue.payoffSceneId).toBe('');
+    expect(isClueResolved(loaded!, clue)).toBe(false);
+    expect(getStats(loaded!).unresolvedClues).toBe(1);
+  });
+
+  it('treats a missing payoff field and a dangling payoff scene as unresolved', () => {
+    const base = createStarterStory();
+    const legacy = {
+      ...base,
+      scenes: base.scenes.map((scene) => ({ ...scene })),
+      clues: [
+        { id: 'clue-missing-payoff', title: '没有回收字段', setupSceneId: base.scenes[0].id },
+        { id: 'clue-dangling', title: '指向被删场景', setupSceneId: base.scenes[0].id, payoffSceneId: 'scene-gone' },
+      ],
+    };
+    const loaded = sanitizeStory(legacy)!;
+    expect(loaded.clues.every((clue) => clue.payoffSceneId === '')).toBe(true);
+    expect(getStats(loaded).unresolvedClues).toBe(2);
+    // 埋下侧标记从伏笔数据重建，与回收侧口径一致
+    expect(loaded.scenes.find((scene) => scene.id === base.scenes[0].id)?.clueIds).toEqual(['clue-missing-payoff', 'clue-dangling']);
+  });
+
+  it('reports setup and payoff links on both scene sides and rolls back when withdrawn', () => {
+    const story = createStarterStory();
+    const first = story.scenes[0];
+    const second = story.scenes[1];
+    story.clues[0].payoffSceneId = second.id;
+    expect(sceneClueLinks(story, first.id).setupClues).toHaveLength(1);
+    expect(sceneClueLinks(story, second.id).payoffClues).toHaveLength(1);
+    expect(sceneClueLinks(story, first.id).payoffClues).toHaveLength(0);
+
+    story.clues[0].payoffSceneId = '';
+    expect(sceneClueLinks(story, second.id).payoffClues).toHaveLength(0);
+    expect(getStats(story).unresolvedClues).toBe(1);
   });
 });
