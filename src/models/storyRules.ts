@@ -1,7 +1,11 @@
-import type { StoryDocument, StoryScene, StoryStats } from './story';
+import type { StoryClue, StoryDocument, StoryScene, StoryStats } from './story';
 
 export function orderedScenes(story: StoryDocument): StoryScene[] {
   return [...story.scenes].sort((a, b) => a.order - b.order);
+}
+
+export function scenePayoffs(story: StoryDocument, sceneId: string): StoryClue[] {
+  return story.clues.filter((clue) => clue.payoffSceneId === sceneId);
 }
 
 export function getStats(story: StoryDocument): StoryStats {
@@ -41,5 +45,13 @@ export function sanitizeStory(input: unknown): StoryDocument | null {
   ) {
     return null;
   }
-  return candidate as StoryDocument;
+  return {
+    ...candidate,
+    scenes: candidate.scenes.map((scene) => ({ ...scene, clueIds: Array.isArray(scene.clueIds) ? scene.clueIds : [] })),
+    clues: candidate.clues.map((clue) => ({
+      ...clue,
+      setupSceneId: typeof clue.setupSceneId === 'string' ? clue.setupSceneId : '',
+      payoffSceneId: typeof clue.payoffSceneId === 'string' ? clue.payoffSceneId : '',
+    })),
+  } as StoryDocument;
 }

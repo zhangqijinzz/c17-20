@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createStarterStory } from '../models/story';
-import { getStats, getTimelineWarning, orderedScenes, sanitizeStory, validateName } from '../models/storyRules';
+import { getStats, getTimelineWarning, orderedScenes, sanitizeStory, scenePayoffs, validateName } from '../models/storyRules';
 
 describe('story domain rules', () => {
   it('sorts scenes and calculates unresolved clues', () => {
@@ -21,5 +21,23 @@ describe('story domain rules', () => {
     expect(sanitizeStory('{bad json}')).toBeNull();
     expect(sanitizeStory({ version: 99 })).toBeNull();
     expect(sanitizeStory(createStarterStory())).not.toBeNull();
+  });
+
+  it('derives scene payoffs from clue relations', () => {
+    const story = createStarterStory();
+    expect(scenePayoffs(story, 'scene-storm')).toHaveLength(0);
+    story.clues[0].payoffSceneId = 'scene-storm';
+    expect(scenePayoffs(story, 'scene-storm').map((clue) => clue.title)).toEqual(['潮汐表背后的日期']);
+    story.clues[0].payoffSceneId = '';
+    expect(scenePayoffs(story, 'scene-storm')).toHaveLength(0);
+  });
+
+  it('keeps legacy clues with missing payoff positions pending', () => {
+    const legacy = JSON.parse(JSON.stringify(createStarterStory()));
+    delete legacy.clues[0].payoffSceneId;
+    const sanitized = sanitizeStory(legacy);
+    expect(sanitized).not.toBeNull();
+    expect(sanitized?.clues[0]?.payoffSceneId).toBe('');
+    expect(sanitized ? getStats(sanitized).unresolvedClues : 0).toBe(1);
   });
 });

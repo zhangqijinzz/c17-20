@@ -33,4 +33,52 @@ describe('story view model', () => {
     viewModel.resetProject();
     expect(viewModel.snapshot.story?.id).toBe(createStarterStory().id);
   });
+
+  it('assigns, reassigns, and retracts clue payoffs with stats following along', () => {
+    const viewModel = new StoryViewModel(new LocalStoryRepository(new MemoryStorageService()));
+    viewModel.initialize();
+    const clueId = viewModel.snapshot.story?.clues[0]?.id ?? '';
+    expect(viewModel.snapshot.stats.unresolvedClues).toBe(1);
+    expect(viewModel.snapshot.stats.completion).toBe(80);
+
+    viewModel.assignPayoff(clueId, 'scene-storm');
+    expect(viewModel.snapshot.story?.clues[0]?.payoffSceneId).toBe('scene-storm');
+    expect(viewModel.snapshot.stats.unresolvedClues).toBe(0);
+    expect(viewModel.snapshot.stats.completion).toBe(100);
+
+    viewModel.assignPayoff(clueId, 'scene-old-harbor');
+    expect(viewModel.snapshot.story?.clues[0]?.payoffSceneId).toBe('scene-old-harbor');
+    expect(viewModel.snapshot.stats.unresolvedClues).toBe(0);
+
+    viewModel.retractPayoff(clueId);
+    expect(viewModel.snapshot.story?.clues[0]?.payoffSceneId).toBe('');
+    expect(viewModel.snapshot.stats.unresolvedClues).toBe(1);
+    expect(viewModel.snapshot.stats.completion).toBe(80);
+  });
+
+  it('rejects unknown payoff scenes and keeps the clue pending', () => {
+    const viewModel = new StoryViewModel(new LocalStoryRepository(new MemoryStorageService()));
+    viewModel.initialize();
+    const clueId = viewModel.snapshot.story?.clues[0]?.id ?? '';
+    viewModel.assignPayoff(clueId, 'scene-not-exist');
+    expect(viewModel.snapshot.story?.clues[0]?.payoffSceneId).toBe('');
+    expect(viewModel.snapshot.stats.unresolvedClues).toBe(1);
+    expect(viewModel.snapshot.notice).toContain('有效的回收场景');
+  });
+
+  it('allows payoff edits after completion and recomputes completion', () => {
+    const viewModel = new StoryViewModel(new LocalStoryRepository(new MemoryStorageService()));
+    viewModel.initialize();
+    const clueId = viewModel.snapshot.story?.clues[0]?.id ?? '';
+    viewModel.completeProject();
+    expect(viewModel.snapshot.status).toBe('completed');
+
+    viewModel.assignPayoff(clueId, 'scene-storm');
+    expect(viewModel.snapshot.stats.unresolvedClues).toBe(0);
+    expect(viewModel.snapshot.stats.completion).toBe(100);
+
+    viewModel.retractPayoff(clueId);
+    expect(viewModel.snapshot.stats.unresolvedClues).toBe(1);
+    expect(viewModel.snapshot.stats.completion).toBe(80);
+  });
 });

@@ -152,6 +152,31 @@ export class StoryViewModel {
     this.setState({ notice: payoffSceneId ? '伏笔关系已建立' : '伏笔已记录，等待回收' });
   }
 
+  assignPayoff(clueId: string, payoffSceneId: string): void {
+    const story = this.requireStory();
+    const clue = story.clues.find((item) => item.id === clueId);
+    if (!clue) return;
+    if (!story.scenes.some((scene) => scene.id === payoffSceneId)) {
+      this.setState({ notice: '请选择有效的回收场景' });
+      return;
+    }
+    this.updateStory((current) => ({
+      ...current,
+      clues: current.clues.map((item) => (item.id === clueId ? { ...item, payoffSceneId } : item)),
+    }));
+    this.setState({ notice: clue.payoffSceneId ? `「${clue.title}」的回收位置已改判` : `「${clue.title}」已补录回收位置` });
+  }
+
+  retractPayoff(clueId: string): void {
+    const clue = this.requireStory().clues.find((item) => item.id === clueId);
+    if (!clue || clue.payoffSceneId === '') return;
+    this.updateStory((current) => ({
+      ...current,
+      clues: current.clues.map((item) => (item.id === clueId ? { ...item, payoffSceneId: '' } : item)),
+    }));
+    this.setState({ notice: `已撤回「${clue.title}」的回收，重新标记为待回收` });
+  }
+
   completeProject(): void {
     this.updateStory((story) => ({ ...story, status: 'complete' }));
     this.setState({ status: 'completed', notice: '项目已标记为完成，仍可继续编辑' });
